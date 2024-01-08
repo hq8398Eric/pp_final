@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
 	out << q << '\n';
 
 	uniform_int_distribution<> zero_one(0, 1);
-	uniform_int_distribution<int64_t> del(0, m * m);
+	uniform_int_distribution<int64_t> del(0, n * n);
 
 	for(int i = 0; i < q; i ++) {
 		int d = zero_one(rng);
