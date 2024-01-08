@@ -1,8 +1,9 @@
 #include <bits/stdc++.h>
 #include "hopcroftKarp.h"
+#include "CycleTimer.h"
 using namespace std;
 
-#define epsilon 64
+#define epsilon 1024 
 
 int main() {
 	int n, m; cin >> n >> m;
@@ -11,6 +12,7 @@ int main() {
 		int x, y; cin >> x >> y;
 		v[x].push_back(y);
 	}
+	double start = CycleTimer::currentSeconds();
 	vector<int> btoa(m, -1);
 	int now = hopcroftKarp(v, btoa);
 	int from = 0; 
@@ -20,6 +22,10 @@ int main() {
 		int d, x, y; cin >> d >> x >> y;
 		if(d == 0) {
 			auto it = find(v[x].begin(), v[x].end(), y);
+			if(it == v[x].end()) {
+				cout << "the fuck\n";
+				exit(-1);
+			}
 			v[x].erase(it);
 		}
 		else {
@@ -30,7 +36,8 @@ int main() {
 			now = hopcroftKarp(v, btoa);
 			from = i;
 		}
-		cout << i << " : " << now << ' ' << from << '\n';;
+		// cout << i << " : " << now << ' ' << from << '\n';
+		cout << i << " : " << CycleTimer::currentSeconds() - start << '\n'; 
 	}
 	return 0;
 }

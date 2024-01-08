@@ -1,10 +1,11 @@
 #include "hopcroftKarp.h"
+#include "CycleTimer.h"
 #include <pthread.h>
 #include <semaphore.h>
 #define MAX_G 1000000
-#define pool_size 2 
-#define T 32 
-#define epsilon 64
+#define pool_size 4 
+#define T 512 
+#define epsilon 1024 
 
 
 int n, m;
@@ -113,10 +114,14 @@ int main() {
 	}
 	
 	init(); // initialize semaphore and shits
-	
+
+
+	double start = CycleTimer::currentSeconds();
+
 	sem_post(&job_sig);
 	while(fromR != 0);
 	cout << "0 : " << curR << '\n';
+
 
 	int q; cin >> q;
 	for(int i = 1; i <= q; i ++) {
@@ -129,8 +134,11 @@ int main() {
 			sem_post(&job_sig);
 		}
 		// as the result by research
-		while(fromR <= i - epsilon);
-		cout << i << " : " << curR << ' ' << fromR << '\n';
+		while(fromR <= i - epsilon) {
+			cout << fromR << '\n';
+		}
+		// cout << i << " : " << curR << ' ' << fromR << '\n';
+		cout << i << " : " << CycleTimer::currentSeconds() - start << '\n'; 
 
 	}
 	
