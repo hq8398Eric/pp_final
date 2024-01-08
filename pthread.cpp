@@ -2,9 +2,9 @@
 #include <pthread.h>
 #include <semaphore.h>
 #define MAX_G 1000000
-#define pool_size 4
-#define T 4
-#define epsilon 8
+#define pool_size 2 
+#define T 32 
+#define epsilon 64
 
 
 int n, m;
@@ -41,9 +41,7 @@ void* workers(void* fuck) {
 		sem_post(&update_now);
 		// gets the place that needs to be worked on
 
-		cout << "someone working on " << to_cal << '\n';
-
-		while(local_time <= to_cal) {
+		while(local_time < to_cal) {
 			pthread_rwlock_rdlock(&mod_lock);
 			auto t = mod[local_time];
 			pthread_rwlock_unlock(&mod_lock);
@@ -51,8 +49,7 @@ void* workers(void* fuck) {
 			int x = t.second.first;
 			int y = t.second.second;
 
-
-			if(t.first == 0) {
+			if(t.first) {
 				localV[x].push_back(y);
 			}
 			else {
@@ -93,7 +90,7 @@ void init() {
 	}
 
 	fromR = INT_MIN;
-	now = -T;
+	now = 0;
 }
 void destruct() {
 	sem_destroy(&job_sig);
@@ -118,11 +115,11 @@ int main() {
 	init(); // initialize semaphore and shits
 	
 	sem_post(&job_sig);
-	while(fromR != -T);
-	cout << curR << '\n';
+	while(fromR != 0);
+	cout << "0 : " << curR << '\n';
 
 	int q; cin >> q;
-	for(int i = 0; i < q; i ++) {
+	for(int i = 1; i <= q; i ++) {
 		int d, x, y; cin >> d >> x >> y;
 		pthread_rwlock_wrlock(&mod_lock);
 		mod.push_back({d, {x, y}});
@@ -132,8 +129,8 @@ int main() {
 			sem_post(&job_sig);
 		}
 		// as the result by research
-		while(fromR < i - epsilon);
-		cout << curR << '\n';
+		while(fromR <= i - epsilon);
+		cout << i << " : " << curR << ' ' << fromR << '\n';
 
 	}
 	
