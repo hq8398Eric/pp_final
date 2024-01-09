@@ -4,24 +4,22 @@
 #include <semaphore.h>
 #define MAX_G 1000000
 #define pool_size 4 
-#define T 512 
-#define epsilon 1024 
+#define T 16
+#define epsilon 32 
 
 
-int n, m;
+int n, m, q;
+vector<int> ans;
 vector<vector<int> > V;
 vector<pair<int, pair<int, int> > > mod;
 
 pthread_t ids[pool_size];
 
 int now;
+bool finished = false;
 // time stamp when told to calculate
 // updated by workers
 // needs the semaphore 
-
-int curR, fromR;
-// curR = the latest result
-// fromR = the timestamp curR is calculated based on
 
 sem_t job_sig;
 sem_t update_now;
@@ -65,16 +63,22 @@ void* workers(void* fuck) {
 			local_time ++;
 		}
 		// apply the changes till the place I want to calculate
-
 		vector<int> btoa(n, -1);
 		int res = hopcroftKarp(localV, btoa);
-	
-		sem_wait(&update_R);
-		if(to_cal > fromR) {
-			fromR = to_cal;
-			curR = res;
+
+		
+		if(to_cal == 0) {
+			for(int i = 0; i < to_cal + epsilon; i ++) {
+				ans[i] = res;
+			}
 		}
-		sem_post(&update_R);
+		else {
+			for(int i = to_cal + epsilon - T; i < min(q, to_cal + epsilon); i ++) {
+				ans[i] = res;
+			}
+		}
+		
+		if(to_cal == q / T * T) finished = true;
 	}
 	return NULL;
 }
@@ -90,7 +94,6 @@ void init() {
 		pthread_create(&ids[i], NULL, workers, NULL);
 	}
 
-	fromR = INT_MIN;
 	now = 0;
 }
 void destruct() {
@@ -106,26 +109,26 @@ void destruct() {
 }
 
 int main() {
-	cin >> n >> m;
+	
+	ifstream in("graph.txt");
+
+	in >> n >> m;
 	V.resize(n);
 	for(int i = 0; i < m; i ++) {
-		int x, y; cin >> x >> y;
+		int x, y; in >> x >> y;
 		V[x].push_back(y);
 	}
 	
 	init(); // initialize semaphore and shits
 
-
+	in >> q;
+	ans.resize(q + 1);
+	
 	double start = CycleTimer::currentSeconds();
-
 	sem_post(&job_sig);
-	while(fromR != 0);
-	cout << "0 : " << curR << '\n';
 
-
-	int q; cin >> q;
 	for(int i = 1; i <= q; i ++) {
-		int d, x, y; cin >> d >> x >> y;
+		int d, x, y; in >> d >> x >> y;
 		pthread_rwlock_wrlock(&mod_lock);
 		mod.push_back({d, {x, y}});
 		pthread_rwlock_unlock(&mod_lock);
@@ -133,14 +136,19 @@ int main() {
 		if(i % T == 0) {
 			sem_post(&job_sig);
 		}
-		// as the result by research
-		while(fromR <= i - epsilon) {
-			cout << fromR << '\n';
-		}
-		// cout << i << " : " << curR << ' ' << fromR << '\n';
-		cout << i << " : " << CycleTimer::currentSeconds() - start << '\n'; 
-
 	}
 	
+	while(!finished);
+
+	double tim = CycleTimer::currentSeconds() - start;
 	destruct(); // destruct semaphore and shits.
+	
+	/*	
+	for(int i = 0; i < q; i ++) {
+		cout << i << " : " << ans[i] << '\n';
+	}
+	*/
+
+	cout << "took : " << tim << '\n';
+		
 }

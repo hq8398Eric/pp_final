@@ -52,7 +52,10 @@ int main(int argc, char* argv[]) {
 		else {
 			int x = dist(rng);
 			int y = dist(rng);
-			if(S.count({x, y})) continue;
+			while(S.count({x, y})) {
+				x = dist(rng);
+				y = dist(rng);
+			}
 			S.insert({x, y});
 			out << d << ' ' << x << ' ' << y << '\n';
 		}
