@@ -12,19 +12,20 @@ using namespace std;
 
 
 int meta[2];
+int cur_finish_time = 0;
 
 void construct_graph(vector<vector<int>> &G) {
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
-    vector<int> buf;
-    vector<int> edge_count;
     
     MPI_Request request = MPI_REQUEST_NULL;
     
     if (rank == 0) {
         int n, m;
         cin >> n >> m;
+        int *edge_count = new int[n];
+        int *buf = new int[m];
         G.resize(n);
         for(int i = 0; i < m; i ++) {
             int x, y; cin >> x >> y;
@@ -33,11 +34,11 @@ void construct_graph(vector<vector<int>> &G) {
         
         int tot_edge_num = 0;
         for (int i = 0; i < n; i ++) {
-            edge_count.push_back(G[i].size());
-            tot_edge_num += G[i].size();
-            for (auto &j : G[i]) {
-                buf.push_back(j);
+            edge_count[i] = G[i].size();
+            for (int j = 0; j < G[i].size(); j ++) {
+                buf[tot_edge_num + j] = G[i][j];
             }
+            tot_edge_num += G[i].size();
         }
         
         meta[0] = n;
@@ -50,15 +51,15 @@ void construct_graph(vector<vector<int>> &G) {
                 MPI_Isend(&buf[0], tot_edge_num, MPI_INT, next_id, 2, MPI_COMM_WORLD, &request);
             } 
         }
-        
+        MPI_Wait(&request, MPI_STATUS_IGNORE);
     } else {
         MPI_Recv(&meta[0], 2, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         int idx = __builtin_clz(rank | 1);
         int from = rank - (1U << 32 - (idx + 1));
 
-        edge_count.resize(meta[0]);
-        buf.resize(meta[1]);
+        int *buf = new int[meta[1]];
+        int *edge_count = new int[meta[0]];
 
         MPI_Recv(&edge_count[0], meta[0], MPI_INT, from, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Recv(&buf[0], meta[1], MPI_INT, from, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -79,20 +80,26 @@ void construct_graph(vector<vector<int>> &G) {
             }
             cur_edge_idx += edge_count[i];
         }
+        MPI_Wait(&request, MPI_STATUS_IGNORE);
     }
-    // MPI_Wait(&request, MPI_STATUS_IGNORE);
+
 }
 
 void check_graph(vector<vector<int>> &G) {
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_rank(MPI_COMM_WORLD, &size);
-    for (int i = 0; i < meta[0]; i ++) {
-        printf("in rank = %d, G[%d].size() = %d, edge = ", rank, i, G[i].size());
-        for (auto &j : G[i]) {
-            printf("%d ", j);
+    if (rank == 1) {
+        for (int i = 0; i < meta[0]; i ++) {
+            printf("G[%d].size() = %d, edge = ", i, G[i].size());
+            for (auto &j : G[i]) {
+                printf("%d ", j);
+            }
+            printf("\n");
         }
-        printf("\n");
+        vector<int> btoa(meta[0], -1);
+        hopcroftKarp(G, btoa);
+        
     }
     MPI_Request request = MPI_REQUEST_NULL;
     MPI_Wait(&request, MPI_STATUS_IGNORE);
@@ -105,10 +112,8 @@ void send_stop(int cur_time) {
     int update[3] = {-1, -1, -1};
     MPI_Request request[size + 1];
     for (int i = 1; i < size; i ++) {
-        MPI_Isend(&update[0], 3, MPI_INT, i, cur_time, MPI_COMM_WORLD, &request[i]);
+        MPI_Send(&update[0], 3, MPI_INT, i, cur_time, MPI_COMM_WORLD);
     }
-    MPI_Waitall(size - 1, &request[1], MPI_STATUS_IGNORE);
-    // printf("Master fin\n");
     return;
 }
 
@@ -126,15 +131,15 @@ void *recv_ans(void *args) {
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     int buf[size][2];
     
-    // MPI_Request recv_request[size];
     int ans = 0;
-    
+    int cur_best = 0x3f3f3f3f;
     for (int i = 1; i < size; i ++) {
-        MPI_Recv(&buf[i][0], 2, MPI_INT, i, cur_ans_time, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        if (cur_ans_time - EPSILON < buf[i][0] && buf[i][0] != -1) {
+        MPI_Recv(buf[i], 2, MPI_INT, i, cur_ans_time, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        if (buf[i][0] != -1 && cur_ans_time - EPSILON < buf[i][0] && cur_best > buf[i][0] - cur_ans_time) {
             ans = buf[i][1];
         }
     }
+    __sync_fetch_and_add(&cur_finish_time, 1);
     parg->ans[cur_ans_time] = ans;
     return NULL;
 }
@@ -155,11 +160,13 @@ void compute_matching(vector<vector<int>> &G) {
     int cur_time = 0;
     int cur_ans_time = 0;
     vector<pthread_t> threads;
-    
+    vector<pargs> args;
     if (rank == 0) {
         int q;
         cin >> q;
-        ans = new int[size];
+        args.resize(q);
+        threads.resize(q);
+        ans = new int[q + 10];
 
         MPI_Request recv_request[size];
         MPI_Status status[size];
@@ -168,50 +175,33 @@ void compute_matching(vector<vector<int>> &G) {
             cin >> d >> x >> y;
             MPI_Request request = MPI_REQUEST_NULL;
             
+            while(cur_finish_time < i - T * size) continue;
+            
             update[0] = d;
             update[1] = x;
             update[2] = y;
             
             for (int i = 1; i < size; i ++) {
-                MPI_Isend(&update[0], 3, MPI_INT, i, cur_time, MPI_COMM_WORLD, &request);
+                MPI_Send(&update[0], 3, MPI_INT, i, cur_time, MPI_COMM_WORLD);
             }
             
             
-            // int cur_ans = 0;
-            // int best_ans_time = 0x3f3f3f3f;
-            // for (int i = size - 1; i > 0; i --) {
-            //     MPI_Irecv(&ans[i][0], 2, MPI_INT, i, 0, MPI_COMM_WORLD, &recv_request[i]);
-            // }
-            // int flag;
-            // int outcomes = 0;
-            // int idx[size];
-            
-            
-            struct pargs args;
-            pthread_t t;
-            args.time = cur_ans_time;
-            args.ans = ans;
-            pthread_create(&t, NULL, recv_ans, (void *) &args);
-            threads.push_back(t);
-            // MPI_Testall(size - 1, &recv_request[1], &flag, &status[1]);
-            // MPI_Testsome(size - 1, &recv_request[1], &idx[0], &outcomes, &status[1]);
-            // if (outcomes == 0) {
-            //     MPI_Waitsome(size - 1, &recv_request[1], &idx[0], &outcomes, &status[1]);
-            // }
-            // for (int i = 0; i < outcomes; i ++) {
-            //     if (ans[idx[i]][0] != -1 && ans[idx[i]][0] - cur_ans_time < best_ans_time && ans[idx[i]][0] - EPSILON < cur_ans_time) {
-            //         best_ans_time = ans[idx[i]][0] - cur_ans_time;
-            //         cur_ans = ans[idx[i]][1];
-            //     }
-            // }
-            // cout << cur_ans << endl;
+            args[i].time = cur_time;
+            args[i].ans = &ans[0];
+            pthread_create(&threads[i], NULL, recv_ans, (void *) &args[i]);
+            if (i >= T * size) {
+                pthread_join(threads[i - T * size], NULL);
+            }
             cur_time += 1;
         }
-        for (int i = 0; i < q; i ++) {
+        for (int i = cur_time - T * size; i < q; i ++) {
             pthread_join(threads[i], NULL);
-            cout << ans[i] << '\n';
         }
         send_stop(cur_time);
+        
+        for (int i = 0; i < q; i ++) {
+            cout << ans[i] << '\n';
+        }
         
     } else {
         int next_time = rank - 1;
@@ -228,8 +218,8 @@ void compute_matching(vector<vector<int>> &G) {
                 break;
             }
             
-            if (update[0] == 0) {
-                G[update[1]] = G[update[2]];
+            if (update[0] == 1) {
+                G[update[1]].push_back(update[2]);
             } else {
 				auto fi = find(G[update[1]].begin(), G[update[1]].end(), update[2]);
 				if(fi == G[update[1]].end()) {
@@ -246,7 +236,7 @@ void compute_matching(vector<vector<int>> &G) {
                 respond[0] = cur_time;
                 respond[1] = res;
             } 
-            MPI_Isend(&respond[0], 2, MPI_INT, 0, 0, MPI_COMM_WORLD, &request);
+            MPI_Send(&respond[0], 2, MPI_INT, 0, cur_time, MPI_COMM_WORLD);
             cur_time += 1;
         }
     }
@@ -254,7 +244,8 @@ void compute_matching(vector<vector<int>> &G) {
 
 int main() {
     
-    MPI_Init(NULL, NULL);
+    int provides;
+    MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provides);
     vector<vector<int>> G;
     construct_graph(G);
     compute_matching(G);
