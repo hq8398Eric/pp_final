@@ -3,13 +3,14 @@ using namespace std;
 
 #include <fstream>
 int main(int argc, char* argv[]) {
-	if(argc < 4) {
-		cout << "Usage: ./generate <nodes> <edges> <queries>\n";
+	if(argc < 5) {
+		cout << "Usage: ./generate <nodes> <edges> <queries> <filename>\n";
 		exit(-1);
 	}
 	long long n = atoi(argv[1]);
 	long long m = atoi(argv[2]);
 	long long q = atoi(argv[3]);
+	string filename = string(argv[4]);
 	if(m > n * n) {
 		cout << "the fuck\n";
 		exit(-1);
@@ -20,7 +21,7 @@ int main(int argc, char* argv[]) {
 	mt19937 rng(rd());
 	uniform_int_distribution<> dist(0, n - 1);
 
-	ofstream out("graph.txt");
+	ofstream out(filename);
 
 	out << n << ' ' << m << '\n';
 
