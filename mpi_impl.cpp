@@ -3,9 +3,10 @@
 #include <cstdio>
 #include <mpi.h>
 #include <pthread.h>
+#include "CycleTimer.h"
 
-#define T 4
-#define EPSILON 8
+#define T 16
+#define EPSILON 16
 
 using namespace std;
 
@@ -13,6 +14,9 @@ using namespace std;
 
 int meta[2];
 int cur_finish_time = 0;
+
+ifstream in;
+ofstream out;
 
 void construct_graph(vector<vector<int>> &G) {
     int rank, size;
@@ -22,13 +26,14 @@ void construct_graph(vector<vector<int>> &G) {
     MPI_Request request = MPI_REQUEST_NULL;
     
     if (rank == 0) {
+
         int n, m;
-        cin >> n >> m;
+        in >> n >> m;
         int *edge_count = new int[n];
         int *buf = new int[m];
         G.resize(n);
         for(int i = 0; i < m; i ++) {
-            int x, y; cin >> x >> y;
+            int x, y; in >> x >> y;
             G[x].push_back(y);
         }
         
@@ -97,7 +102,7 @@ void check_graph(vector<vector<int>> &G) {
             }
             printf("\n");
         }
-        vector<int> btoa(meta[0], -1);
+        vector<int> btoa(meta[1], -1);
         hopcroftKarp(G, btoa);
         
     }
@@ -112,35 +117,48 @@ void send_stop(int cur_time) {
     int update[3] = {-1, -1, -1};
     MPI_Request request[size + 1];
     for (int i = 1; i < size; i ++) {
-        MPI_Send(&update[0], 3, MPI_INT, i, cur_time, MPI_COMM_WORLD);
+        MPI_Send(&update[0], 3, MPI_INT, i, cur_time + 3, MPI_COMM_WORLD);
     }
     return;
 }
 
 
 struct pargs {
-    int time;
+    int tot_num;
     int *ans;
 };
 
 void *recv_ans(void *args) {
     struct pargs *parg = (struct pargs *) args;
-    int cur_ans_time = parg->time;
+    // int cur_ans_time = parg->time;
+    int cur_time = 0;
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
-    int buf[size][2];
+    int buf[2];
     
-    int ans = 0;
-    int cur_best = 0x3f3f3f3f;
-    for (int i = 1; i < size; i ++) {
-        MPI_Recv(buf[i], 2, MPI_INT, i, cur_ans_time, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        if (buf[i][0] != -1 && cur_ans_time - EPSILON < buf[i][0] && cur_best > buf[i][0] - cur_ans_time) {
-            ans = buf[i][1];
+    // int ans = 0;
+    // int cur_best = 0x3f3f3f3f;
+    // for (int i = 1; i < size; i ++) {
+    //     MPI_Recv(buf[i], 2, MPI_INT, i, cur_ans_time, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    //     if (buf[i][0] != -1 && cur_ans_time - EPSILON < buf[i][0] && cur_best > buf[i][0] - cur_ans_time) {
+    //         ans = buf[i][1];
+    //     }
+    // }
+    int from = 0;
+    int cur_ans = 0;
+    for (int i = 0; i < parg->tot_num; i ++) {
+        if (i % T == 0) {
+            MPI_Recv(&buf[0], 2, MPI_INT, from + 1, i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            cur_ans = buf[1];
+            from += 1;
+            from %= (size - 1);
         }
+        parg->ans[i] = cur_ans;
+        // printf("After %d\n", i);
+ //       __sync_fetch_and_add(&cur_finish_time, 1);
+        // printf("cur_finish_time =  %d\n", cur_finish_time);
     }
-    __sync_fetch_and_add(&cur_finish_time, 1);
-    parg->ans[cur_ans_time] = ans;
     return NULL;
 }
 
@@ -159,60 +177,57 @@ void compute_matching(vector<vector<int>> &G) {
     int cur_tag = 3;
     int cur_time = 0;
     int cur_ans_time = 0;
-    vector<pthread_t> threads;
-    vector<pargs> args;
+    pthread_t recv_thread;
+    pargs args;
     if (rank == 0) {
+
         int q;
-        cin >> q;
-        args.resize(q);
-        threads.resize(q);
+        in >> q;
         ans = new int[q + 10];
 
-        MPI_Request recv_request[size];
-        MPI_Status status[size];
+        args.ans = &ans[0];
+        args.tot_num = q;
+        pthread_create(&recv_thread, NULL, recv_ans, (void *) &args);
         for (int i = 0; i < q; i ++) {
             int d, x, y;
-            cin >> d >> x >> y;
+            in >> d >> x >> y;
             MPI_Request request = MPI_REQUEST_NULL;
             
-            while(cur_finish_time < i - T * size) continue;
+//            while(*(&cur_finish_time) < i - T * (size - 1)) {
+//		    __sync_synchronize();
+//	    }
+	    // printf("cur_finish_time = %d\n, cur_time = %d\n", cur_finish_time, i);
             
             update[0] = d;
             update[1] = x;
             update[2] = y;
             
             for (int i = 1; i < size; i ++) {
-                MPI_Send(&update[0], 3, MPI_INT, i, cur_time, MPI_COMM_WORLD);
+                MPI_Send(&update[0], 3, MPI_INT, i, cur_time + 3, MPI_COMM_WORLD);
             }
             
             
-            args[i].time = cur_time;
-            args[i].ans = &ans[0];
-            pthread_create(&threads[i], NULL, recv_ans, (void *) &args[i]);
-            if (i >= T * size) {
-                pthread_join(threads[i - T * size], NULL);
-            }
+            args.ans = &ans[0];
             cur_time += 1;
         }
-        for (int i = cur_time - T * size; i < q; i ++) {
-            pthread_join(threads[i], NULL);
-        }
+        pthread_join(recv_thread, NULL);
         send_stop(cur_time);
         
         for (int i = 0; i < q; i ++) {
-            cout << ans[i] << '\n';
+            out << ans[i] << '\n';
         }
         
     } else {
-        int next_time = rank - 1;
+        int next_time = (rank - 1) * T;
         MPI_Request request = MPI_REQUEST_NULL;
         int respond[2];
         respond[0] = -1;
         respond[1] = -1;
-
+        
         while (true) {
             MPI_Status status;
-            MPI_Recv(&update[0], 3, MPI_INT, 0, cur_time, MPI_COMM_WORLD, &status);
+            MPI_Recv(&update[0], 3, MPI_INT, 0, cur_time + 3, MPI_COMM_WORLD, &status);
+	    // printf("After recv time %d info, update[0] = %d\n", cur_time, update[0]);
             
             if (update[0] == -1) {
                 break;
@@ -223,20 +238,23 @@ void compute_matching(vector<vector<int>> &G) {
             } else {
 				auto fi = find(G[update[1]].begin(), G[update[1]].end(), update[2]);
 				if(fi == G[update[1]].end()) {
-					cout << "invalid mod\n";
+					cerr << "invalid mod\n";
 					exit(-1);
 				}
 				G[update[1]].erase(fi);
             }
             
             if (next_time == cur_time) {
-		        vector<int> btoa(meta[0], -1);
+		        vector<int> btoa(meta[1], -1);
                 int res = hopcroftKarp(G, btoa);
-                next_time += T;
+                next_time += T * (size - 1);
                 respond[0] = cur_time;
                 respond[1] = res;
+                // printf("rank = %d, cur_time = %d\n", rank, cur_time);
+		        // fflush(stdout);
+                MPI_Isend(&respond[0], 2, MPI_INT, 0, cur_time, MPI_COMM_WORLD, &request);
+            	MPI_Wait(&request, MPI_STATUS_IGNORE);
             } 
-            MPI_Send(&respond[0], 2, MPI_INT, 0, cur_time, MPI_COMM_WORLD);
             cur_time += 1;
         }
     }
@@ -244,11 +262,24 @@ void compute_matching(vector<vector<int>> &G) {
 
 int main() {
     
+    
     int provides;
     MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provides);
+
+    double start = CycleTimer::currentSeconds();
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    if (rank == 0) {
+        in.open("graph.txt");
+        out.open("out_mpi.txt");
+    }
     vector<vector<int>> G;
     construct_graph(G);
     compute_matching(G);
+    double end = CycleTimer::currentSeconds();
+    if (rank == 0)
+        cout << "took : " << end - start << '\n';
     MPI_Finalize();
     
 
