@@ -16,7 +16,6 @@ vector<pair<int, pair<int, int> > > mod;
 pthread_t ids[pool_size];
 
 int now;
-bool finished = false;
 // time stamp when told to calculate
 // updated by workers
 // needs the semaphore 
@@ -24,6 +23,7 @@ bool finished = false;
 sem_t job_sig;
 sem_t update_now;
 sem_t update_R;
+sem_t finished;
 pthread_rwlock_t mod_lock;
 
 void* workers(void* fuck) {
@@ -39,6 +39,9 @@ void* workers(void* fuck) {
 		now = now + T;
 		sem_post(&update_now);
 		// gets the place that needs to be worked on
+		if(to_cal > q) {
+			break;
+		}
 
 		while(local_time < to_cal) {
 			pthread_rwlock_rdlock(&mod_lock);
@@ -65,8 +68,7 @@ void* workers(void* fuck) {
 		// apply the changes till the place I want to calculate
 		vector<int> btoa(n, -1);
 		int res = hopcroftKarp(localV, btoa);
-
-		
+	
 		if(to_cal == 0) {
 			for(int i = 0; i < to_cal + epsilon; i ++) {
 				ans[i] = res;
@@ -77,9 +79,8 @@ void* workers(void* fuck) {
 				ans[i] = res;
 			}
 		}
-		
-		if(to_cal == q / T * T) finished = true;
 	}
+	pthread_exit(NULL);
 	return NULL;
 }
 
@@ -87,6 +88,7 @@ void init() {
 	sem_init(&job_sig, 0, 0);
 	sem_init(&update_now, 0, 1);
 	sem_init(&update_R, 0, 1);
+	sem_init(&finished, 0, -(q/T));
 
 	pthread_rwlock_init(&mod_lock, NULL);
 
@@ -100,6 +102,7 @@ void destruct() {
 	sem_destroy(&job_sig);
 	sem_destroy(&update_now);
 	sem_destroy(&update_R);
+	sem_destroy(&finished);
 
 	pthread_rwlock_destroy(&mod_lock);
 
@@ -118,11 +121,12 @@ int main() {
 		int x, y; in >> x >> y;
 		V[x].push_back(y);
 	}
-	
-	init(); // initialize semaphore and shits
 
 	in >> q;
 	ans.resize(q + 1);
+	
+	init(); // initialize semaphore and shits
+	
 	
 	double start = CycleTimer::currentSeconds();
 	sem_post(&job_sig);
@@ -137,17 +141,24 @@ int main() {
 			sem_post(&job_sig);
 		}
 	}
-	
-	while(!finished);
+	for(int i = 0; i < pool_size; i ++) {
+		sem_post(&job_sig);
+		// for them to terminate themself
+	}
+
+	for(int i = 0; i < pool_size; i ++) {
+		pthread_join(ids[i], NULL);
+	}
 
 	double tim = CycleTimer::currentSeconds() - start;
 	destruct(); // destruct semaphore and shits.
-	
-	/*	
+
+		
 	for(int i = 0; i < q; i ++) {
-		cout << i << " : " << ans[i] << '\n';
+		 // cout << i << " : " << ans[i] << '\n';
+		assert(ans[i] != 0);
 	}
-	*/
+	
 
 	cout << "took : " << tim << '\n';
 		
