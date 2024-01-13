@@ -4,7 +4,7 @@
 #include <semaphore.h>
 #define MAX_G 1000000
 #define pool_size 4 
-#define T 16
+#define T 16 
 #define epsilon 32 
 
 
@@ -155,7 +155,7 @@ int main() {
 
 		
 	for(int i = 0; i < q; i ++) {
-		 // cout << i << " : " << ans[i] << '\n';
+		// cout << i << " : " << ans[i] << '\n';
 		assert(ans[i] != 0);
 	}
 	
