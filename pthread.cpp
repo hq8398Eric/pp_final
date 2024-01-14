@@ -77,7 +77,7 @@ void* workers(void* fuck) {
 		}
 		// apply the changes till the place I want to calculate
 		vector<int> btoa(m, -1);
-		int res = Parallel_hopcroftKarp_new(localV, btoa, m);
+		int res = hopcroftKarp(localV, btoa);
 	
 		if(to_cal == 0) {
 			for(int i = 0; i < to_cal + EPSILON; i ++) {

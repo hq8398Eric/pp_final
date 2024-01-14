@@ -53,7 +53,6 @@ int hopcroftKarp(vector<vi>& g, vi& btoa) {
 				if (btoa[b] == -1) {
 					B[b] = lay;
 					islast = 1;
-					// printf("Fucked at %d, %d\n", a, b);
 				}
 				else if (btoa[b] != a && !B[b]) {
 					B[b] = lay;
@@ -98,7 +97,6 @@ int Parallel_hopcroftKarp(vector<vi>&g, vi& btoa, int num_edges) {
 				int a = cur[i];
 				for (int b : g[a]) {
 					if (btoa[b] == -1) {
-						// printf("fucked at %d, %d\n", a, b);
 						B[b] = lay;
 						islast = 1;
 					}
