@@ -12,7 +12,7 @@ int main(int argc, char* argv[]) {
 	long long q = atoi(argv[3]);
 	string filename = "graph_" + string(argv[1]) + "_" + string(argv[2]) + "_" + string(argv[3]) + ".txt";
 	if(m > n * n) {
-		cout << "the fuck\n";
+		cout << "Error: m > n * n\n";
 		exit(-1);
 	}
 	cout << "generating bipartite graph of " << n << " nodes on each side and " << m << " edges\n";
