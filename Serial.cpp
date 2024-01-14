@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
 		if(d == 0) {
 			auto it = find(v[x].begin(), v[x].end(), y);
 			if(it == v[x].end()) {
-				cout << "the fuck\n";
+				cout << "Error\n";
 				exit(-1);
 			}
 			v[x].erase(it);
