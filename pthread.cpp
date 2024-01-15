@@ -167,6 +167,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	double tim = CycleTimer::currentSeconds() - start;
+
 	destruct(); // destruct semaphore and other things.
 
 		
