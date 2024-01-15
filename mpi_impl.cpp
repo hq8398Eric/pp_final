@@ -5,8 +5,13 @@
 #include <pthread.h>
 #include "CycleTimer.h"
 
+#ifndef T
 #define T 16
+#endif
+
+#ifndef EPSILON
 #define EPSILON 16
+#endif
 
 using namespace std;
 
@@ -290,3 +295,5 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
+
+
