@@ -3,10 +3,19 @@
 #include "CycleTimer.h"
 using namespace std;
 
-#define epsilon 32 
+#ifndef EPSILON
+#define EPSILON 64
+#endif
 
-int main() {
-	ifstream in("graph.txt");
+int main(int argc, char *argv[]) {
+	ifstream in;
+	if (argc == 2) {
+		in.open(string(argv[1]));
+		
+	} else {
+		in.open("graph_10000_100000_100000.txt");
+	}
+	ofstream out("output.txt");
 
 	int n, m; in >> n >> m;
 	vector<vector<int> > v(n);
@@ -24,7 +33,7 @@ int main() {
 		if(d == 0) {
 			auto it = find(v[x].begin(), v[x].end(), y);
 			if(it == v[x].end()) {
-				cout << "the fuck\n";
+				cout << "Error\n";
 				exit(-1);
 			}
 			v[x].erase(it);
@@ -32,11 +41,12 @@ int main() {
 		else {
 			v[x].push_back(y);
 		}
-		if(i % epsilon == 0) {
+		if(i % EPSILON == 0) {
 			vector<int> btoa(m, -1);
-			now = hopcroftKarp(v, btoa);
+			now = Parallel_hopcroftKarp_new(v, btoa, m);
 			from = i;
 		}
+		out << now << '\n';
 		// cout << i - 1 << " : " << now << '\n'; 
 		// cout << i << " : " << CycleTimer::currentSeconds() - start << '\n'; 
 	}

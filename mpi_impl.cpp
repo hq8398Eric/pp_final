@@ -260,7 +260,7 @@ void compute_matching(vector<vector<int>> &G) {
     }
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     
     
     int provides;
@@ -271,7 +271,11 @@ int main() {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     if (rank == 0) {
-        in.open("graph.txt");
+        if (argc == 2) {
+            in.open(string(argv[1]));
+        } else {
+            in.open("graph.txt");
+        }
         out.open("out_mpi.txt");
     }
     vector<vector<int>> G;

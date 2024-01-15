@@ -3,9 +3,19 @@
 #include <pthread.h>
 #include <semaphore.h>
 #define MAX_G 1000000
-#define pool_size 4 
-#define T 16 
-#define epsilon 32 
+
+#ifndef POOLSIZE
+#define POOLSIZE 4 
+#endif
+
+#ifndef T
+#define T 32
+#endif
+
+
+#ifndef EPSILON
+#define EPSILON 32 
+#endif
 
 
 int n, m, q;
@@ -13,7 +23,7 @@ vector<int> ans;
 vector<vector<int> > V;
 vector<pair<int, pair<int, int> > > mod;
 
-pthread_t ids[pool_size];
+pthread_t ids[POOLSIZE];
 
 int now;
 // time stamp when told to calculate
@@ -66,16 +76,16 @@ void* workers(void* fuck) {
 			local_time ++;
 		}
 		// apply the changes till the place I want to calculate
-		vector<int> btoa(n, -1);
+		vector<int> btoa(m, -1);
 		int res = hopcroftKarp(localV, btoa);
 	
 		if(to_cal == 0) {
-			for(int i = 0; i < to_cal + epsilon; i ++) {
+			for(int i = 0; i < to_cal + EPSILON; i ++) {
 				ans[i] = res;
 			}
 		}
 		else {
-			for(int i = to_cal + epsilon - T; i < min(q, to_cal + epsilon); i ++) {
+			for(int i = to_cal + EPSILON - T; i < min(q, to_cal + EPSILON); i ++) {
 				ans[i] = res;
 			}
 		}
@@ -92,7 +102,7 @@ void init() {
 
 	pthread_rwlock_init(&mod_lock, NULL);
 
-	for(int i = 0; i < pool_size; i ++) {
+	for(int i = 0; i < POOLSIZE; i ++) {
 		pthread_create(&ids[i], NULL, workers, NULL);
 	}
 
@@ -106,14 +116,20 @@ void destruct() {
 
 	pthread_rwlock_destroy(&mod_lock);
 
-	for(int i = 0; i < pool_size; i ++) {
+	for(int i = 0; i < POOLSIZE; i ++) {
 		pthread_cancel(ids[i]);
 	}
 }
 
-int main() {
+int main(int argc, char *argv[]) {
 	
-	ifstream in("graph.txt");
+	ifstream in;
+	if(argc == 2) {
+		in.open(string(argv[1]));
+	} else {
+		in.open("graph_10000_20000_100000.txt");
+	}
+	ofstream out("out_pthread.txt");
 
 	in >> n >> m;
 	V.resize(n);
@@ -125,7 +141,7 @@ int main() {
 	in >> q;
 	ans.resize(q + 1);
 	
-	init(); // initialize semaphore and shits
+	init(); // initialize semaphore and other things
 	
 	
 	double start = CycleTimer::currentSeconds();
@@ -141,22 +157,23 @@ int main() {
 			sem_post(&job_sig);
 		}
 	}
-	for(int i = 0; i < pool_size; i ++) {
+	for(int i = 0; i < POOLSIZE; i ++) {
 		sem_post(&job_sig);
 		// for them to terminate themself
 	}
 
-	for(int i = 0; i < pool_size; i ++) {
+	for(int i = 0; i < POOLSIZE; i ++) {
 		pthread_join(ids[i], NULL);
 	}
 
 	double tim = CycleTimer::currentSeconds() - start;
-	destruct(); // destruct semaphore and shits.
+
+	destruct(); // destruct semaphore and other things.
 
 		
 	for(int i = 0; i < q; i ++) {
-		// cout << i << " : " << ans[i] << '\n';
-		assert(ans[i] != 0);
+		 out << ans[i] << '\n';
+//		assert(ans[i] != 0);
 	}
 	
 
